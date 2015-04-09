@@ -148,23 +148,6 @@ class Cloudlet(object):
         """
         pass
 
-    def resume(self, **kwargs):
-        """Resume the VM instance if it's not active.
-
-        :return: True if successfully resumed
-        :rtype: bool
-        """
-        pass
-
-    def assign_IP(self, **kwargs):
-        """Assign IP address to the VM to be accessible
-
-        :return: assigned IP address
-        :rtype: str
-        """
-        pass
-
-
 
 class VM(object):
     """Represent a virtual mahince instance at cloudlet
@@ -215,5 +198,19 @@ class VM(object):
         """
         pass
 
+    def resume(self, **kwargs):
+        """Resume the VM instance if it's not active.
 
+        :return: True if successfully resumed
+        :rtype: bool
+        """
+        pass
+
+    def assign_IP(self, **kwargs):
+        """Assign IP address to the VM to be accessible
+
+        :return: assigned IP address
+        :rtype: str
+        """
+        pass
 
