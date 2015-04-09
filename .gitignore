@@ -1,0 +1,13 @@
+MANIFEST
+TODO.md
+dist/
+build/
+docs/_build/
+*.a
+*.o
+*.cproject
+*.lzma
+*.qcow2
+*.mem
+*.pyc
+*.class
