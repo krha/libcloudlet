@@ -63,37 +63,50 @@ class DiscoveryService(object):
 class MobileClient(object):
     """Data structure for information of the mobile client
 
+    This data structure is designed to save attributes for describing
+    the mobile client. Arbitrary key, value paris can be saved and these will
+    eventually be passed to the cloudlet using REST API.
+
     :param GPS_latitude: GPS coordinate latitude of the mobile device
     :param GPS_longitude: GPS longitude of a mobile device
-    :param ip_addr: ipv4 of a mobile device
     :param network_type: Type of the network of a mobile client. Either 'cellular' or 'WiFi'
+    :param **kwargs: dictionary to save mobile client related information using
+      key-value format
     :type GPS_latitude: str of decimal degree
     :type GPS_longitude: str of decimal degree
     :type ip_addr: str
     :type network_type: str
+    :type **kwargs: dictionary
     """
 
-    def __init__(self, GPS_latitude=None, GPS_longitude=None, ip_addr=None, network_type=None, **kwargs):
+    def __init__(self, GPS_latitude=None, GPS_longitude=None, network_type=None, **kwargs):
         pass
 
 
 class Application(object):
-    """Data structure for the mobile application
+    """Data structure for the mobile application.
+
+    This data structure is designed to save attributes for describing
+    the application. Arbitrary key, value paris can be saved and these will
+    eventually be passed to the cloudlet using REST API.
 
     :param UUID: UUID string of the mobile application
-    :param min_RTT_ms: minimum latency (RTT) required for offloading
+    :param max_RTT_ms: minimum latency (RTT) required for offloading
     :param min_CPU_clock_MHz: minimal CPU clock speed required for offloading
     :param cache_URL_list: necessary cached URLs
     :param cache_file_list: ncessary cached files
+    :param **kwargs: dictionary to save app related information using
+      key-value format
     :type UUID: str
-    :type min_RTT_ms: int
+    :type max_RTT_ms: int
     :type min_CPU_clock_MHz: int
     :type cache_URL_list: list of str
     :type cache_file_list: list of str
+    :type **kwargs: dictionary
 
     """
 
-    def __init__(self, UUID, min_RTT_ms=None, min_CPU_clock_MHz=None, cache_URL_list=None, cache_file_list=None, **kwargs):
+    def __init__(self, UUID, max_RTT_ms=None, min_CPU_clock_MHz=None, cache_URL_list=None, cache_file_list=None, **kwargs):
         pass
 
 
