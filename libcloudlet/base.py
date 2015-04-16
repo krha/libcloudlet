@@ -41,16 +41,21 @@ class DiscoveryService(object):
         """
         pass
 
-    def discover(self, cloud_URL=None, client=None, application=None, **kwargs):
-        """Discover a list of cloudlets by sending query to a cloud directory 
-        service.
+    def discover(self, account=None, key=None, 
+                 cloud_URL=None, client=None, application=None, **kwargs):
+        """Discover a list of cloudlets by sending query to directory server.
 
         :param cloud_URL: IP address or domain name of a cloud directory server
-        :param client: data structure saving client information
-        :param application: data structure saving application information
         :type cloud_URL: string
+        :param account: account for directory server.
+        :type account: string
+        :param key: access key for directory server.
+        :type key: string
+        :param client: data structure saving client information
         :type client: :class:`MobileClient`
+        :param application: data structure saving application information
         :type application: :class:`Application`
+
         :return: list of selected cloudlet object using client and application\
             infomation
         :rtype: list of :class:`Cloudlet` object
@@ -114,14 +119,12 @@ class Cloudlet(object):
     """Represent a single cloudlet
 
     :param URL: IP address or domain name of the cloudlet
-    :param access_account: access account of the cloudlet
-    :param access_key: access key of the cloudlet
     :type URL: str
-    :type access_account: str
-    :type access_key: str
+    :param access_token: authentication token to access Cloudlet
+    :type access_token: str
     """
 
-    def __init__(URL, access_account, access_key=None, **kwargs):
+    def __init__(URL, access_token, **kwargs):
         pass
 
     def associate(self):
