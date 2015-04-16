@@ -41,14 +41,14 @@ class DiscoveryService(object):
         """
         pass
 
-    def discover(self, subscribing_vendor_list=None,
-                 cloud_URL=None, client=None, application=None, **kwargs):
+    def discover(self, cloud_URL=None, cloudlet_provider_list=None,
+                 client=None, application=None, **kwargs):
         """Discover a list of cloudlets by sending query to directory server.
 
         :param cloud_URL: IP address or domain name of a cloud directory server
         :type cloud_URL: string
-        :param subscribing_vendor_list: list of cloudlet vendors
-        :type key: list of string
+        :param cloudlet_provider_list: list of cloudlet provider
+        :type cloudlet_provider_list: list of string
         :param client: data structure saving client information
         :type client: :class:`MobileClient`
         :param application: data structure saving application information
