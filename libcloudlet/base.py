@@ -47,9 +47,9 @@ class DiscoveryService(object):
 
         :param cloud_URL: IP address or domain name of a cloud directory server
         :type cloud_URL: string
-        :param account: account for directory server.
+        :param account: account for directory server
         :type account: string
-        :param key: access key for directory server.
+        :param key: access key for directory server
         :type key: string
         :param client: data structure saving client information
         :type client: :class:`MobileClient`
@@ -96,7 +96,7 @@ class Application(object):
     eventually be passed to the cloudlet using REST API.
 
     :param UUID: UUID string of the mobile application
-    :param max_RTT_ms: minimum latency (RTT) required for offloading
+    :param max_RTT_ms: maximum allowed latency (RTT) for offloading
     :param min_CPU_clock_MHz: minimal CPU clock speed required for offloading
     :param cache_URL_list: necessary cached URLs
     :param cache_file_list: ncessary cached files
