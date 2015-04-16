@@ -41,16 +41,14 @@ class DiscoveryService(object):
         """
         pass
 
-    def discover(self, account=None, key=None, 
+    def discover(self, subscribing_vendor_list=None,
                  cloud_URL=None, client=None, application=None, **kwargs):
         """Discover a list of cloudlets by sending query to directory server.
 
         :param cloud_URL: IP address or domain name of a cloud directory server
         :type cloud_URL: string
-        :param account: account for directory server
-        :type account: string
-        :param key: access key for directory server
-        :type key: string
+        :param subscribing_vendor_list: list of cloudlet vendors
+        :type key: list of string
         :param client: data structure saving client information
         :type client: :class:`MobileClient`
         :param application: data structure saving application information
@@ -120,11 +118,11 @@ class Cloudlet(object):
 
     :param URL: IP address or domain name of the cloudlet
     :type URL: str
-    :param access_token: authentication token to access Cloudlet
-    :type access_token: str
+    :param auth_token: authentication token to access Cloudlet
+    :type auth_token: str
     """
 
-    def __init__(URL, access_token, **kwargs):
+    def __init__(URL, auth_token, **kwargs):
         pass
 
     def associate(self):
@@ -180,7 +178,7 @@ class VM(object):
         cloudlet.
 
         :param dest_cloudlet: Handoff destination cloudlet.\
-            It contains access information to the cloudlet.
+            It contains authentication information to the cloudlet.
         :type dest_cloudlet: :class:`Cloudlet`
         :return: A VM instance at the destination :class:`Cloudlet`
         :rtype: :class:`VM`
