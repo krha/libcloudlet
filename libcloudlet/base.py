@@ -70,16 +70,19 @@ class MobileClient(object):
     the mobile client. Arbitrary key, value paris can be saved and these will
     eventually be passed to the cloudlet using REST API.
 
-    :param GPS_latitude: GPS coordinate latitude of the mobile device
-    :param GPS_longitude: GPS longitude of a mobile device
-    :param network_type: Type of the network of a mobile client. Either 'cellular' or 'WiFi'
     :param **kwargs: dictionary to save mobile client related information using
       key-value format
-    :type GPS_latitude: str of decimal degree
-    :type GPS_longitude: str of decimal degree
-    :type ip_addr: str
-    :type network_type: str
     :type **kwargs: dictionary
+
+    Key and values should be seriealizable to JSON format.
+    For example, GPS coordinates can be appended as follows.
+
+    >>> from libcloudlet.base import MobileClient 
+    >>> properties = {"GPS_latitude": "40.439722",
+                      "GPS_longitude": "-79.976389",
+                      "network_type": "cellular"}
+    >>> mobile_client = MobileClient(**properties)
+
     """
 
     def __init__(self, GPS_latitude=None, GPS_longitude=None, network_type=None, **kwargs):
@@ -93,23 +96,24 @@ class Application(object):
     the application. Arbitrary key, value paris can be saved and these will
     eventually be passed to the cloudlet using REST API.
 
-    :param UUID: UUID string of the mobile application
-    :param max_RTT_ms: maximum allowed latency (RTT) for offloading
-    :param min_CPU_clock_MHz: minimal CPU clock speed required for offloading
-    :param cache_URL_list: necessary cached URLs
-    :param cache_file_list: ncessary cached files
     :param **kwargs: dictionary to save app related information using
       key-value format
-    :type UUID: str
-    :type max_RTT_ms: int
-    :type min_CPU_clock_MHz: int
-    :type cache_URL_list: list of str
-    :type cache_file_list: list of str
     :type **kwargs: dictionary
+
+    App information will be saved using <key, value> pairs passed by
+    kwargs parameter. Key and values should be seriealizable to JSON format.
+    For example, maximum allowed latency (RTT) and minimal CPU clock speed
+    required for offloading can be defined as follows.
+
+    >>> from libcloudlet.base import Application
+    >>> properties = {"UUID": "c8727360-e769-11e4-8a00-1681e6b88ec1"
+                      "max_RTT_ms": 50,
+                      "min_CPU_clock_MHz": 2000}
+    >>> speech_recogn_app = Application(**properties)
 
     """
 
-    def __init__(self, UUID, max_RTT_ms=None, min_CPU_clock_MHz=None, cache_URL_list=None, cache_file_list=None, **kwargs):
+    def __init__(self, **kwargs):
         pass
 
 
