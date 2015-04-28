@@ -68,7 +68,7 @@ class MobileClient(object):
 
     This data structure is designed to save attributes for describing
     the mobile client. Arbitrary key, value paris can be saved and these will
-    eventually be passed to the cloudlet using REST API.
+    eventually be passed to the cloudlet.
 
     :param **kwargs: dictionary to save mobile client related information using
       key-value format
@@ -94,7 +94,7 @@ class Application(object):
 
     This data structure is designed to save attributes for describing
     the application. Arbitrary key, value paris can be saved and these will
-    eventually be passed to the cloudlet using REST API.
+    eventually be passed to the cloudlet.
 
     :param **kwargs: dictionary to save app related information using
       key-value format
