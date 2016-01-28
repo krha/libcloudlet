@@ -32,6 +32,8 @@ import socket
 import logging
 import pprint
 from urlparse import urlparse
+from contextlib import closing
+from . import const
 
 
 class CloudletException(Exception):
@@ -79,62 +81,22 @@ ch.setFormatter(formatter)
 _LOG.addHandler(ch)
 
 
-class CloudletQueryingThread(threading.Thread):
-    def __init__(self, cloudlet_info, app_info=None):
-        self.cloudlet_info = cloudlet_info
-        self.url = "http://%s:%d%s" % (
-                cloudlet_info['ip_address'],
-                cloudlet_info['rest_api_port'],
-                cloudlet_info['rest_api_url'])
-        self.app_info = app_info
-        threading.Thread.__init__(self, target=self.get_info)
-
-    def get_info(self):
-        try:
-            _LOG.info("Connecting to cloudlet at %s" % self.url)
-            end_point = urlparse(self.url)
-            if self.app_info:
-                params = json.dumps(self.app_info.__dict__)
-            else:
-                params = json.dumps({})
-            headers = {"Content-type": "application/json"}
-            conn = httplib.HTTPConnection(end_point.hostname, \
-                    end_point.port, timeout=10)
-            _LOG.debug("Query parameter:")
-            _LOG.debug((pprint.pformat(json.loads(params))))
-            conn.request("GET", "%s" % end_point[2], params, headers)
-            data = conn.getresponse().read()
-            json_data = json.loads(data)
-            self.cloudlet_info.update(json_data)
-        except socket.error as e:
-            _LOG.error(str(e) + "\n")
-
-
 class DiscoveryService(object):
     """Abstract class defining minimal methods for cloudlet discovery service.
     """
     REST_API_URL        =   "/api/v1/Cloudlet/search/"
 
-    def __init__(self, **kwargs):
+    def __init__(self, directory_server, **kwargs):
         """
+        :param directory_server: IP address or domain name of a cloud directory server
+        :type directory_server: string
         """
-        pass
+        self.directory_server = directory_server
+        if self.directory_server.endswith('/'):
+            self.directory_server = self.directory_server[:-1]
 
-    @staticmethod
-    def _preprocess_URL(cloud_URL):
-        if cloud_URL.endswith('/'):
-            cloud_URL = cloud_URL[:-1]
-        return cloud_URL
-
-    @staticmethod
-    def discover(cloud_URL=None, cloudlet_provider_list=None,
-                 client_info=None, app_info=None, n_ret_clodulet=3, **kwargs):
+    def discover(self, client_info=None, app_info=None, **kwargs):
         """Discover a list of cloudlets by sending query to directory server.
-
-        :param cloud_URL: IP address or domain name of a cloud directory server
-        :type cloud_URL: string
-        :param cloudlet_provider_list: list of cloudlet provider
-        :type cloudlet_provider_list: list of string
         :param client_info: data structure saving client information
         :type client_info: :class:`MobileClient`
         :param app_info: data structure saving application information
@@ -142,45 +104,23 @@ class DiscoveryService(object):
 
         :return: list of selected cloudlet object using client and application\
             infomation
-        :rtype: list of :class:`Cloudlet` object
+        :rtype: :class:`Cloudlet` object
         """
-        # proprocessing cloud_URL
-        cloud_URL = DiscoveryService._preprocess_URL(cloud_URL)
+
+        # first level search to get cloudlet list from central directory server
         time_cloud_conn = time.time()
-        # get cloudlet list from central cloud directory server
-        latitude = getattr(app_info, 'GPS_latitude', None)
-        longitude = getattr(app_info, 'GPS_longitude', None)
-        client_ip = getattr(app_info, 'client_ip', None)
-        if latitude and longitude:
-            end_point = urlparse("%s%s?n=%d&latitude=%s&longitude=%s" % \
-                    (cloud_URL, DiscoveryService.REST_API_URL, \
-                    n_max, latitude, longitude))
-        elif client_ip:
-            # search by IP address
-            end_point = urlparse("%s%s?n=%d&client_ip=%s" % \
-                    (cloud_URL, DiscoveryService.REST_API_URL, \
-                    n_max, str(client_ip)))
-        else:
-            end_point = urlparse("%s%s?n=%d" % \
-                    (cloud_URL, DiscoveryService.REST_API_URL, \
-                    n_ret_clodulet))
-        try:
-            cloudlet_list = []
-            cloudlets = DiscoveryService.http_get(end_point)
-            for cloudlet in cloudlets:
-                ipaddr = cloudlet.get('ip_address', '')
-                rest_api_url = cloudlet.get('rest_api_url', '')
-                if len(ipaddr) != 0 and len(rest_api_url) != 0:
-                    cloudlet_list.append(cloudlet)
-        except socket.error as e:
-            CloudletException("Cannot connect to %s" % str(e))
+        cloudlet_list = DiscoveryService._list_cloudlets(self.directory_server, app_info)
+        if not cloudlet_list:
+            msg = "Cannot find any cloudlet from directory server at %s" % str(end_point)
+            raise CloudletException(msg)
 
         # second level search to each cloudlet
         time_cloudlet_conn = time.time()
-        DiscoveryService._get_cloudlet_infos(cloudlet_list, app_info)
+        DiscoveryService._get_cloudlet_details(cloudlet_list, app_info)
         time_cloudlet_ret = time.time()
 
-        cloudlet = DiscoveryService._find_best_cloudlet(cloudlet_list, app_info)
+        # select the best one
+        cloudlet = DiscoveryService._select_cloudlet(cloudlet_list, app_info)
         time_query_end = time.time()
 
         # print time measurement
@@ -193,11 +133,60 @@ class DiscoveryService(object):
                        (time_query_end-time_cloudlet_ret))
             _LOG.debug("Total time:\t\t\t\t%f" %\
                        (time_query_end-time_cloudlet_ret))
-
         return cloudlet
 
     @staticmethod
-    def _get_cloudlet_infos(cloudlet_list, app_info):
+    def _list_cloudlets(directory_server, app_info, n_ret_cloudlet=3):
+        """ get the list of promising cloudlets from the directory server
+        :param app_info: data structure saving application information
+        :type app_info: :class:`Application`
+        :return: cloudlet list
+        :rtype: list of :class:`Cloudlet` object
+        """
+        # set up end point for REST API call
+        latitude = getattr(app_info, 'GPS_latitude', None)
+        longitude = getattr(app_info, 'GPS_longitude', None)
+        client_ip = getattr(app_info, 'client_ip', None)
+        if latitude and longitude: # search by given GPS coordinate
+            end_point = urlparse("%s%s?n=%d&latitude=%s&longitude=%s" % \
+                    (directory_server, DiscoveryService.REST_API_URL, \
+                    n_max, latitude, longitude))
+        elif client_ip: # search by specified IP address
+            end_point = urlparse("%s%s?n=%d&client_ip=%s" % \
+                    (directory_server, DiscoveryService.REST_API_URL, \
+                    n_max, str(client_ip)))
+        else: # search by device's IP address
+            end_point = urlparse("%s%s?n=%d" % \
+                    (directory_server, DiscoveryService.REST_API_URL, \
+                    n_ret_cloudlet))
+
+        # send query and organize results
+        ret_data = DiscoveryService._http_get(end_point)
+        cloudlets = json.loads(ret_data).get('cloudlet', list())
+        if not cloudlets:
+            msg = "No cloudlet is active at %s" % str(end_point)
+            raise CloudletException(msg)
+        cloudlet_list = []
+        for cloudlet in cloudlets:
+            ipaddr = cloudlet.get('ip_address', None)
+            port = cloudlet.get('rest_api_port', None)
+            rest_api_url = cloudlet.get('rest_api_url', None)
+            if ipaddr and port and rest_api_url:
+                endpoint = "http://%s:%d%s" % (ipaddr,
+                                               port,
+                                               rest_api_url)
+                new_cloudlet = Cloudlet(REST_endpoint=endpoint, **cloudlet)
+                cloudlet_list.append(new_cloudlet)
+        return cloudlet_list
+
+    @staticmethod
+    def _get_cloudlet_details(cloudlet_list, app_info):
+        """ Get details information of each cloudlet and update :class:`Cloudlet` object
+
+        :param cloudlet_list : list of promising cloudlet
+        :type cloudlet_list: list of :class:`Cloudlet` object
+        :return: None
+        """
         thread_list = list()
         for cloudlet in cloudlet_list:
             new_thread = CloudletQueryingThread(cloudlet, app_info)
@@ -208,71 +197,88 @@ class DiscoveryService(object):
             th.join()
 
     @staticmethod
-    def _find_best_cloudlet(cloudlet_list, app_info=None):
-        # pre-screening conditions
+    def _select_cloudlet(cloudlet_list, app_info=None):
+        """ Select one cloudlet using application information
+
+        :param cloudlet_list : list of promising cloudlet
+        :type cloudlet_list: list of :class:`Cloudlet` object
+        :return: selected cloudlet
+        :rtype: :class:`Cloudlet` object
+        """
+        # check pre-conditions
         item_len = len(cloudlet_list)
         if item_len == 0:
             msg = "No available cloudlet at the list\n"
             raise DiscoveryException(msg)
-        if item_len == 1:
-            _LOG.info("Only one cloudlet is available")
-            return cloudlet_list[0]
+        #if item_len == 1:
+        #    _LOG.info("Only one cloudlet is available")
+        #    return cloudlet_list[0]
 
-        # filterout using required conditions
-        filtered_cloudlet = list(cloudlet_list)
+        # filter out using required conditions
+        filtered_cloudlet = []
         for cloudlet in cloudlet_list:
+            # get application specific cloudlet info
+            cloudlet_info = getattr(cloudlet, app_info.get_appid(), None)
+            if not cloudlet_info:
+                continue
             # check CPU min
-            required_clock_speed = getattr(app_info, AppInfo.REQUIRED_MIN_CPU_CLOCK, None)
-            cloudlet_cpu_speed = cloudlet.get(ResourceConst.CLOCK_SPEED)
-            if required_clock_speed is not None:
-                if cloudlet_cpu_speed < required_clock_speed:
-                    filtered_cloudlet.remove(cloudlet)
+            required_clock_speed = getattr(app_info, const.AppInfoConst.REQUIRED_MIN_CPU_CLOCK, 0.0)
+            cloudlet_cpu_speed = cloudlet_info.get(const.ResourceInfoConst.CLOCK_SPEED, 0.0)
+            if required_clock_speed:
+                if cloudlet_cpu_speed >= required_clock_speed:
+                    filtered_cloudlet.append(cloudlet)
             # check rtt
-            #required_rtt = getattr(app_info, AppInfo.REQUIRED_RTT, None)
-            #cloudlet_rtt = getattr(cloudlet, ResourceConst.RTT_BETWEEN_CLIENT, None)
-            #if required_rtt is not None:
+            #required_rtt = getattr(app_info, const.AppInfoConst.REQUIRED_RTT, 0)
+            #cloudlet_rtt = cloudlet_info.get(const.ResourceInfoConst.RTT_BETWEEN_CLIENT, 0)
+            #if required_rtt:
             #    if cloudlet_rtt < required_rtt:
             #        filtered_cloudlet.append(cloudlet)
         if len(filtered_cloudlet) == 0:
-            _LOG.warning("No available cloudlet after filtering out")
+            _LOG.warning("No available cloudlet meeting condition")
             return None
 
         # check cache
-        max_cache_score = float(-1)
+        max_cache_score = 0.0
         max_cache_cloudlet = None
         for cloudlet in filtered_cloudlet:
-            cache_score = cloudlet.get(ResourceConst.APP_CACHE_TOTAL_SCORE, None)
-            if cache_score is not None and cache_score > max_cache_score:
-                max_cache_score = cache_score
-                max_cache_cloudlet = cloudlet
-        if max_cache_cloudlet is not None:
-            return max_cache_cloudlet
-        else:
-            return filtered_cloudlet[0]
-
+            # get application specific cloudlet info
+            cloudlet_info = getattr(cloudlet, app_info.get_appid(), None)
+            if not cloudlet_info:
+                continue
+            cache_score = cloudlet_info.get(const.ResourceInfoConst.APP_CACHE_TOTAL_SCORE, None)
+            if cache_score and cache_score > max_cache_score:
+                max_cache_score, max_cache_cloudlet = cache_score, cloudlet
+        return max_cache_cloudlet or filtered_cloudlet[0]
 
         # check application preference
-        #weight_rtt = getattr(app_info, AppInfo.KEY_WEIGHT_CACHE, None)
-        #weight_cache = getattr(app_info, AppInfo.KEY_WEIGHT_CACHE, None)
-        #weight_resource = getattr(app_info, AppInfo.KEY_WEIGHT_CACHE, None)
-        #if weight_rtt is None or weight_cache is None or \
-        #        weight_resource is None:
+        #weight_rtt = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
+        #weight_cache = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
+        #weight_resource = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
+        #if weight_rtt or weight_cache or weight_resource:
         #    index = random.randint(0, item_len-1)
         #    return cloudlet_list[index]
 
     @staticmethod
-    def http_get(end_point):
+    def _http_get(end_point):
+        """ Send REST query using HTTP GET method
+        :param end_point: end point URL
+        :type end_point: string
+        :return: HTTP GET result
+        :rtype: string
+        """
         _LOG.info("Connecting to %s" % (end_point.geturl()))
         params = urllib.urlencode({})
         headers = {"Content-type":"application/json"}
         end_string = "%s?%s" % (end_point[2], end_point[4])
-
-        conn = httplib.HTTPConnection(end_point[1])
-        conn.request("GET", end_string, params, headers)
-        data = conn.getresponse().read()
-        response_list = json.loads(data).get('cloudlet', list())
-        conn.close()
-        return response_list
+        try:
+            with closing(httplib.HTTPConnection(end_point[1])) as conn:
+                conn = httplib.HTTPConnection(end_point[1])
+                conn.request("GET", end_string, params, headers)
+                data = conn.getresponse().read()
+                return data
+        except socket.error as e:
+            msg = "Failed to connect to %s" % str(end_point)
+            raise CloudletException(msg)
 
 
 
@@ -328,8 +334,16 @@ class Application(object):
     """
 
     def __init__(self, **kwargs):
+        self.__dict__[const.AppInfoConst.APP_ID] = ""
         for k, v in kwargs.iteritems():
             setattr(self, k, v)
+
+    def get_appid(self):
+        """ return appplication ID
+        :return: application ID
+        :rtype: string
+        """
+        return getattr(self, const.AppInfoConst.APP_ID, "")
 
 
 class Cloudlet(object):
@@ -341,14 +355,36 @@ class Cloudlet(object):
     :type auth_token: str
     """
 
-    def __init__(URL, auth_token, **kwargs):
-        pass
+    def __init__(self, REST_endpoint, auth_token=None, **kwargs):
+        self.REST_endpoint = REST_endpoint
+        meta_info = {}
+        for k, v in kwargs.iteritems():
+            meta_info[k] = v
+        setattr(self, 'meta_info', meta_info)
+
+    def get_info(self, app_info):
+        """ Query cloudlet using application information
+
+        :param app_info: application information
+        :type app_info: object of :class:`Application`
+        return: None
+        """
+        _LOG.info("Connecting to cloudlet at %s" % self.REST_endpoint)
+        end_point = urlparse(self.REST_endpoint)
+        params = json.dumps(app_info.__dict__) or {}
+        headers = {"Content-type": "application/json"}
+        with closing(httplib.HTTPConnection(end_point.hostname, end_point.port, timeout=10)) as conn:
+            _LOG.debug("Query parameter:\n%s" % str(pprint.pformat(json.loads(params))))
+            conn.request("GET", "%s" % end_point[2], params, headers)
+            data = conn.getresponse().read()
+            json_data = json.loads(data)
+            setattr(self, app_info.get_appid(), json_data)
 
     def associate(self):
         """ Connect and associate with a cloudlet
 
-        return: associated cloudlet
-        rtype: :class:`VM`
+        :return: associated cloudlet
+        :rtype: :class:`VM`
         """
         pass
 
@@ -357,7 +393,7 @@ class Cloudlet(object):
         Disassociate with a cloudlet, and terminate all VMs that a user
         was using.
 
-        return: None
+        :return: None
         """
         pass
 
@@ -380,6 +416,30 @@ class Cloudlet(object):
         :raises: :class:`ProvisioningException` when provisioning fails.
         """
         pass
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        attrs = pprint.pformat(self.__dict__)
+        return attrs
+
+
+
+class CloudletQueryingThread(threading.Thread):
+    """ Thread wrapper to connect multiple cloudlets in parallel
+    """
+
+    def __init__(self, cloudlet, app_info=None):
+        self.cloudlet = cloudlet
+        self.app_info = app_info
+        threading.Thread.__init__(self, target=self.run)
+
+    def run(self):
+        """ thread main method
+        """
+        self.cloudlet.get_info(self.app_info)
+
 
 
 class VM(object):

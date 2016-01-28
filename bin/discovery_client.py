@@ -98,11 +98,9 @@ def main(argv):
     m_device_info = MobileClient(**properties)
 
     # find the best cloudlet querying to the registration server
-    cloudlet = DiscoveryService.discover(cloud_URL=settings.directory_server,
-                                       cloudlet_provider_list=None,
-                                       client_info=m_device_info,
-                                       app_info=app_info)
-
+    discovery = DiscoveryService(settings.directory_server)
+    cloudlet = discovery.discover(client_info=m_device_info,
+                       app_info=app_info)
     sys.stdout.write("Query results:\n")
     sys.stdout.write(pprint.pformat(cloudlet)+"\n")
 
