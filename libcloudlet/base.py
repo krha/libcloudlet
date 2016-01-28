@@ -371,7 +371,7 @@ class Cloudlet(object):
         """
         _LOG.info("Connecting to cloudlet at %s" % self.REST_endpoint)
         end_point = urlparse(self.REST_endpoint)
-        params = json.dumps(app_info.__dict__) or {}
+        params = json.dumps({'application': app_info.__dict__})
         headers = {"Content-type": "application/json"}
         with closing(httplib.HTTPConnection(end_point.hostname, end_point.port, timeout=10)) as conn:
             _LOG.debug("Query parameter:\n%s" % str(pprint.pformat(json.loads(params))))
