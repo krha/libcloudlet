@@ -99,6 +99,71 @@ class DiscoveryService(object):
         """
         pass
 
+
+class ElijahCloudletSelection(object):
+
+    @staticmethod
+    def select_cloudlet(cloudlet_list, app_info):
+        """ Select one cloudlet using application information
+
+        :param cloudlet_list : list of promising cloudlet
+        :type cloudlet_list: list of :class:`Cloudlet` object
+        :return: selected cloudlet
+        :rtype: :class:`Cloudlet` object
+        """
+        # check pre-conditions
+        item_len = len(cloudlet_list)
+        if item_len == 0:
+            msg = "No available cloudlet at the list\n"
+            raise DiscoveryException(msg)
+        if item_len == 1:
+            _LOG.info("Only one cloudlet is available")
+            return cloudlet_list[0]
+
+        # filter out using required conditions
+        filtered_cloudlet = []
+        for cloudlet in cloudlet_list:
+            # get application specific cloudlet info
+            cloudlet_info = getattr(cloudlet, app_info.get_appid(), None)
+            if not cloudlet_info:
+                continue
+            # check CPU min
+            required_clock_speed = getattr(app_info, const.AppInfoConst.REQUIRED_MIN_CPU_CLOCK, 0.0)
+            cloudlet_cpu_speed = cloudlet_info.get(const.ResourceInfoConst.CLOCK_SPEED, 0.0)
+            if required_clock_speed:
+                if cloudlet_cpu_speed >= required_clock_speed:
+                    filtered_cloudlet.append(cloudlet)
+            # check rtt
+            #required_rtt = getattr(app_info, const.AppInfoConst.REQUIRED_RTT, 0)
+            #cloudlet_rtt = cloudlet_info.get(const.ResourceInfoConst.RTT_BETWEEN_CLIENT, 0)
+            #if required_rtt:
+            #    if cloudlet_rtt < required_rtt:
+            #        filtered_cloudlet.append(cloudlet)
+        if len(filtered_cloudlet) == 0:
+            _LOG.warning("No available cloudlet meeting condition")
+            return None
+
+        # check cache
+        max_cache_score = 0.0
+        max_cache_cloudlet = None
+        for cloudlet in filtered_cloudlet:
+            # get application specific cloudlet info
+            cloudlet_info = getattr(cloudlet, app_info.get_appid(), None)
+            if not cloudlet_info:
+                continue
+            cache_score = cloudlet_info.get(const.ResourceInfoConst.APP_CACHE_TOTAL_SCORE, None)
+            if cache_score and cache_score > max_cache_score:
+                max_cache_score, max_cache_cloudlet = cache_score, cloudlet
+        return max_cache_cloudlet or filtered_cloudlet[0]
+
+        # check application preference
+        #weight_rtt = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
+        #weight_cache = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
+        #weight_resource = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
+        #if weight_rtt or weight_cache or weight_resource:
+        #    index = random.randint(0, item_len-1)
+        #    return cloudlet_list[index]
+
 class ElijahCloudletDiscovery(DiscoveryService):
     _REST_API_URL        =   "/api/v1/Cloudlet/search/"
 
@@ -109,12 +174,17 @@ class ElijahCloudletDiscovery(DiscoveryService):
         """
         super(ElijahCloudletDiscovery, self).__init__(directory_server, **kwargs)
 
-    def discover(self, client_info=None, app_info=None, **kwargs):
+    def discover(self, client_info=None, app_info=None,
+                 selection_algorithm=None, **kwargs):
         """Discover a list of cloudlets by sending query to directory server.
+
         :param client_info: data structure saving client information
         :type client_info: :class:`MobileClient`
         :param app_info: data structure saving application information
         :type app_info: :class:`Application`
+        :param selection_algorithm: custom function to select cloudlet
+        :type selection_algorithm: function pointer of\
+            slection_algorithm(list of :class:`Cloudlet`, app_info)
 
         :return: list of selected cloudlet object using client and application\
             infomation
@@ -134,7 +204,9 @@ class ElijahCloudletDiscovery(DiscoveryService):
         time_cloudlet_ret = time.time()
 
         # select the best one
-        cloudlet = self._select_cloudlet(cloudlet_list, app_info)
+        if not selection_algorithm:
+            selection_algorithm = ElijahCloudletSelection.select_cloudlet
+        cloudlet = selection_algorithm(cloudlet_list, app_info)
         time_query_end = time.time()
 
         # print time measurement
@@ -210,67 +282,6 @@ class ElijahCloudletDiscovery(DiscoveryService):
         for th in thread_list:
             th.join()
 
-    @staticmethod
-    def _select_cloudlet(cloudlet_list, app_info=None):
-        """ Select one cloudlet using application information
-
-        :param cloudlet_list : list of promising cloudlet
-        :type cloudlet_list: list of :class:`Cloudlet` object
-        :return: selected cloudlet
-        :rtype: :class:`Cloudlet` object
-        """
-        # check pre-conditions
-        item_len = len(cloudlet_list)
-        if item_len == 0:
-            msg = "No available cloudlet at the list\n"
-            raise DiscoveryException(msg)
-        #if item_len == 1:
-        #    _LOG.info("Only one cloudlet is available")
-        #    return cloudlet_list[0]
-
-        # filter out using required conditions
-        filtered_cloudlet = []
-        for cloudlet in cloudlet_list:
-            # get application specific cloudlet info
-            cloudlet_info = getattr(cloudlet, app_info.get_appid(), None)
-            if not cloudlet_info:
-                continue
-            # check CPU min
-            required_clock_speed = getattr(app_info, const.AppInfoConst.REQUIRED_MIN_CPU_CLOCK, 0.0)
-            cloudlet_cpu_speed = cloudlet_info.get(const.ResourceInfoConst.CLOCK_SPEED, 0.0)
-            if required_clock_speed:
-                if cloudlet_cpu_speed >= required_clock_speed:
-                    filtered_cloudlet.append(cloudlet)
-            # check rtt
-            #required_rtt = getattr(app_info, const.AppInfoConst.REQUIRED_RTT, 0)
-            #cloudlet_rtt = cloudlet_info.get(const.ResourceInfoConst.RTT_BETWEEN_CLIENT, 0)
-            #if required_rtt:
-            #    if cloudlet_rtt < required_rtt:
-            #        filtered_cloudlet.append(cloudlet)
-        if len(filtered_cloudlet) == 0:
-            _LOG.warning("No available cloudlet meeting condition")
-            return None
-
-        # check cache
-        max_cache_score = 0.0
-        max_cache_cloudlet = None
-        for cloudlet in filtered_cloudlet:
-            # get application specific cloudlet info
-            cloudlet_info = getattr(cloudlet, app_info.get_appid(), None)
-            if not cloudlet_info:
-                continue
-            cache_score = cloudlet_info.get(const.ResourceInfoConst.APP_CACHE_TOTAL_SCORE, None)
-            if cache_score and cache_score > max_cache_score:
-                max_cache_score, max_cache_cloudlet = cache_score, cloudlet
-        return max_cache_cloudlet or filtered_cloudlet[0]
-
-        # check application preference
-        #weight_rtt = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
-        #weight_cache = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
-        #weight_resource = getattr(app_info, const.AppInfoConst.KEY_WEIGHT_CACHE, None)
-        #if weight_rtt or weight_cache or weight_resource:
-        #    index = random.randint(0, item_len-1)
-        #    return cloudlet_list[index]
 
     @staticmethod
     def _http_get(end_point):
