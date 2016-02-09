@@ -98,7 +98,7 @@ def main(argv):
     m_device_info = MobileClient(**properties)
 
     # find the best cloudlet querying to the registration server
-    discovery = DiscoveryService(settings.directory_server)
+    discovery = ElijahCloudletDiscovery(settings.directory_server)
     cloudlet = discovery.discover(client_info=m_device_info,
                        app_info=app_info)
     sys.stdout.write("Query results:\n")

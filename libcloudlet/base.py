@@ -84,9 +84,8 @@ _LOG.addHandler(ch)
 class DiscoveryService(object):
     """Abstract class defining minimal methods for cloudlet discovery service.
     """
-    REST_API_URL        =   "/api/v1/Cloudlet/search/"
 
-    def __init__(self, directory_server, **kwargs):
+    def __init__(self, directory_server=None, **kwargs):
         """
         :param directory_server: IP address or domain name of a cloud directory server
         :type directory_server: string
@@ -94,6 +93,21 @@ class DiscoveryService(object):
         self.directory_server = directory_server
         if self.directory_server.endswith('/'):
             self.directory_server = self.directory_server[:-1]
+
+    def discover(self, **kwargs):
+        """Abstract method to discover a list of cloudlets
+        """
+        pass
+
+class ElijahCloudletDiscovery(DiscoveryService):
+    _REST_API_URL        =   "/api/v1/Cloudlet/search/"
+
+    def __init__(self, directory_server=None, **kwargs):
+        """
+        :param directory_server: IP address or domain name of a cloud directory server
+        :type directory_server: string
+        """
+        super(ElijahCloudletDiscovery, self).__init__(directory_server, **kwargs)
 
     def discover(self, client_info=None, app_info=None, **kwargs):
         """Discover a list of cloudlets by sending query to directory server.
@@ -109,18 +123,18 @@ class DiscoveryService(object):
 
         # first level search to get cloudlet list from central directory server
         time_cloud_conn = time.time()
-        cloudlet_list = DiscoveryService._list_cloudlets(self.directory_server, app_info)
+        cloudlet_list = self._list_cloudlets(self.directory_server, app_info)
         if not cloudlet_list:
             msg = "Cannot find any cloudlet from directory server at %s" % str(end_point)
             raise CloudletException(msg)
 
         # second level search to each cloudlet
         time_cloudlet_conn = time.time()
-        DiscoveryService._get_cloudlet_details(cloudlet_list, app_info)
+        self._get_cloudlet_details(cloudlet_list, app_info)
         time_cloudlet_ret = time.time()
 
         # select the best one
-        cloudlet = DiscoveryService._select_cloudlet(cloudlet_list, app_info)
+        cloudlet = self._select_cloudlet(cloudlet_list, app_info)
         time_query_end = time.time()
 
         # print time measurement
@@ -149,19 +163,19 @@ class DiscoveryService(object):
         client_ip = getattr(app_info, 'client_ip', None)
         if latitude and longitude: # search by given GPS coordinate
             end_point = urlparse("%s%s?n=%d&latitude=%s&longitude=%s" % \
-                    (directory_server, DiscoveryService.REST_API_URL, \
+                    (directory_server, ElijahCloudletDiscovery._REST_API_URL, \
                     n_max, latitude, longitude))
         elif client_ip: # search by specified IP address
             end_point = urlparse("%s%s?n=%d&client_ip=%s" % \
-                    (directory_server, DiscoveryService.REST_API_URL, \
+                    (directory_server, ElijahCloudletDiscovery._REST_API_URL, \
                     n_max, str(client_ip)))
         else: # search by device's IP address
             end_point = urlparse("%s%s?n=%d" % \
-                    (directory_server, DiscoveryService.REST_API_URL, \
+                    (directory_server, ElijahCloudletDiscovery._REST_API_URL, \
                     n_ret_cloudlet))
 
         # send query and organize results
-        ret_data = DiscoveryService._http_get(end_point)
+        ret_data = ElijahCloudletDiscovery._http_get(end_point)
         cloudlets = json.loads(ret_data).get('cloudlet', list())
         if not cloudlets:
             msg = "No cloudlet is active at %s" % str(end_point)
