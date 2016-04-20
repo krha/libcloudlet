@@ -178,11 +178,11 @@ class ElijahCloudletDiscovery(DiscoveryService):
                  selection_algorithm=None, **kwargs):
         """Discover a list of cloudlets by sending query to directory server.
 
-        :param client_info: data structure saving client information
+        :param client_info: data structure saving a mobile client information
         :type client_info: :class:`MobileClient`
-        :param app_info: data structure saving application information
+        :param app_info: data structure saving an application information
         :type app_info: :class:`Application`
-        :param selection_algorithm: custom function to select cloudlet
+        :param selection_algorithm: custom function for selecting cloudlet
         :type selection_algorithm: function pointer of\
             slection_algorithm(list of :class:`Cloudlet`, app_info)
 
